@@ -182,6 +182,7 @@ for sim = 1:n_simulations
         end
         
         altitude(i+1) = z(i+1);
+        
     end
     
     max_altitudes(sim) = max(altitude);
@@ -202,6 +203,89 @@ for sim = 1:n_simulations
         fprintf('█');
     end
 end
+
+fprintf('=== PART (b): Wind Output at given Input Altitude ===\n');
+function [ug, vg, wg] = wind_turb(alt, sigma_gust, V_fs, dt, t_max)
+    %alt units in feet
+    time_vec = 0:dt:t_max;
+    n_time = length(time_vec);
+    ug = zeros(n_time, 1);
+    vg = zeros(n_time, 1);
+    wg = zeros(n_time, 1);
+    alt = 0.3048*alt; %feet to meter
+    
+    for i = 1:n_time-1
+        h = alt(i);
+        if h <= 1000
+            Lw = h; 
+            Lu = h / (0.177 + 0.000823*h)^1.2; 
+            Lv = Lu;
+            sigmaw = sigma_gust;
+            sigmau = sigma_gust / (0.177 + 0.000823*h)^0.4;
+            sigmav = sigmau;
+        elseif h >= 2000
+            Lw = 1750; 
+            Lu = Lw; 
+            Lv = Lw;
+            sigmaw = sigma_gust;
+            sigmau = sigmaw;
+            sigmav = sigmau;
+        elseif h > 1000 && h < 2000
+            h1 = 1000; 
+            Lw1     = h1;
+            Lu1     = h1 / (0.177 + 0.000823*h1)^1.2;
+            Lv1     = Lu1;
+            sigmaw1 = sigma_gust;
+            sigmau1 = sigma_gust / (0.177 + 0.000823*h1)^0.4;
+            sigmav1 = sigmau1;
+
+            h2 = 2000;
+            Lw2     = 1750;
+            Lu2     = 1750;
+            Lv2     = 1750;        
+            sigmaw2 = sigma_gust;
+            sigmau2 = sigma_gust;
+            sigmav2 = sigma_gust;
+
+            slope = (h - h1) / (h2 - h1);   % ranges from 0 to 1
+        
+            Lw = Lw1 + slope*(Lw2 - Lw1);
+            Lu = Lu1 + slope*(Lu2 - Lu1);
+            Lv = Lv1 + slope*(Lv2 - Lv1);
+        
+            sigmaw = sigmaw1 + slope*(sigmaw2 - sigmaw1);
+            sigmau = sigmau1 + slope*(sigmau2 - sigmau1);
+            sigmav = sigmav1 + slope*(sigmav2 - sigmav1);
+        else
+            warning('Height is not in range for wind model');
+        end
+        V_dt = V_fs*dt;
+
+        ug(i+1) = (1 - V_dt/Lu)*ug(i) + sigmau * sqrt(2*V_dt/Lu) * randn; 
+        vg(i+1) = (1 - V_dt/Lv)*vg(i) + sigmav * sqrt(2*V_dt/Lv) * randn; 
+        wg(i+1) = (1 - V_dt/Lw)*wg(i) + sigmaw * sqrt(2*V_dt/Lw) * randn;
+    end
+end
+sigma_gust = 0.44704*46*rand; 
+%mph to m/s multiplied by 46mph multiplied by rand 
+%gives random wind speed between "light air" to "gale"
+%source - www.weather.gov
+[ug, vg, wg] = wind_turb(altitude, sigma_gust, velocity, dt, t_max);
+
+vx = vx - ug;
+vy = -vg;
+vz = vz - wg;
+V = sqrt(vx.^2 + vy.^2 + vz.^2);
+velocity = V;
+
+figure;
+wind_gust = sqrt(ug.^2 + vg.^2 + wg.^2);
+plot(altitude, wind_gust, 'b-', 'LineWidth', 2);
+ylabel('Altitude (km)');
+xlabel('Wind Gust (km/s)');
+title('Part B: Wind Gusts varying with Altitude');
+grid on;
+
 fprintf(' Done!\n\n');
 
 fprintf('TRAJECTORY RESULTS:\n');
@@ -474,3 +558,4 @@ else
     fprintf('  • STATUS: ✓ STABLE - No action needed\n');
 end
 fprintf('\n================================================================\n');
+
